@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from .schema import Plan, Rejected
 from .prompt import SYSTEM_PROMPT, build_user_message
 from .validate import validate_plan, format_errors
+from .sourcetime import resolve_source_times
 
 load_dotenv()
 
@@ -26,7 +27,9 @@ def _get_client() -> OpenAI:
         key = os.getenv("FEATHERLESS_API_KEY", "")
         if not key or key == "your_key_here":
             raise RuntimeError("FEATHERLESS_API_KEY is not set - add it to backend/.env")
-        _client = OpenAI(base_url=os.getenv("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1"), api_key=key)
+        # Fail fast instead of hanging the UI on "Planning..." when the provider stalls.
+        _client = OpenAI(base_url=os.getenv("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1"), api_key=key,
+                         timeout=60, max_retries=1)
     return _client
 
 
@@ -38,12 +41,27 @@ def _extract_json(text: str) -> str:
     return text[start : end + 1]
 
 
+def with_cut_points(timeline: dict) -> dict:
+    """Add cutPointsSec: times where two pieces of the same source meet on a track (earlier cuts)."""
+    by_track: dict[str, list[dict]] = {}
+    for c in timeline.get("clips", []):
+        by_track.setdefault(c["trackId"], []).append(c)
+    cuts = set()
+    for cs in by_track.values():
+        cs = sorted(cs, key=lambda c: c["startSec"])
+        for a, b in zip(cs, cs[1:]):
+            if a.get("type") in ("video", "audio") and a.get("name") == b.get("name") \
+                    and abs(a["startSec"] + a["durationSec"] - b["startSec"]) < 0.05:
+                cuts.add(round(b["startSec"], 2))
+    return {**timeline, "cutPointsSec": sorted(cuts)}
+
+
 def make_plan(request: str, timeline: dict, previous_plan: dict | None = None,
-              validation_errors: list[str] | None = None) -> tuple[Plan, int]:
+              validation_errors: list[str] | None = None, history: list[dict] | None = None) -> tuple[Plan, int]:
     """Layer 1: returns (plan, repairCount). Up to 2 retries, feeding Pydantic errors back to the model."""
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": build_user_message(request, timeline, previous_plan, validation_errors)},
+        {"role": "user", "content": build_user_message(request, timeline, previous_plan, validation_errors, history)},
     ]
     last_error = "unknown"
     for attempt in range(3):
@@ -63,22 +81,29 @@ def make_plan(request: str, timeline: dict, previous_plan: dict | None = None,
     raise PlanError(last_error)
 
 
-def make_validated_plan(request: str, timeline: dict, previous_plan: dict | None = None
-                        ) -> tuple[Plan, int, list[Rejected]]:
+def make_validated_plan(request: str, timeline: dict, previous_plan: dict | None = None,
+                        history: list[dict] | None = None) -> tuple[Plan, int, list[Rejected]]:
     """Layers 1 + 2: shape-valid plan, one semantic repair, then drop any op that is still invalid.
     Returns (plan with only valid ops, repairCount, rejected ops with reasons)."""
-    plan, repairs = make_plan(request, timeline, previous_plan)
+    timeline = with_cut_points(timeline)
+    plan, repairs = make_plan(request, timeline, previous_plan, history=history)
     if plan.unsupportedReason:
         return plan, repairs, []
+    notes = resolve_source_times(plan, timeline)
 
     errors = validate_plan(plan, timeline)
     if errors:
-        plan, more = make_plan(request, timeline, plan.model_dump(), format_errors(plan, errors))
+        plan, more = make_plan(request, timeline, plan.model_dump(), format_errors(plan, errors), history)
         repairs += 1 + more
         if plan.unsupportedReason:
             return plan, repairs, []
+        notes = resolve_source_times(plan, timeline)
         errors = validate_plan(plan, timeline)
 
     rejected = [Rejected(op=plan.ops[i].model_dump(), reason="; ".join(errs)) for i, errs in errors.items()]
     plan.ops = [o for i, o in enumerate(plan.ops) if i not in errors]
+    if notes and not plan.ops and not plan.reply:  # everything asked for was already cut
+        plan.reply = "Nothing more to cut: " + "; ".join(notes) + "."
+    elif notes:
+        plan.reply = ((plan.reply + " ") if plan.reply else "") + "Note: " + "; ".join(notes) + "."
     return plan, repairs, rejected

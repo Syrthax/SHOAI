@@ -62,6 +62,11 @@ export function applyOps(engine: any, ops: Op[], fps: number, label: string) {
           later.forEach((x) => engine.moveClip(x.id, x.trackId, x.trackId, Math.max(0, x.startFrame - cut)))
           break
         }
+        case 'setVolume': {
+          const c = find(o.clipId)
+          if (c) engine.updateClip(c.id, c.trackId, { volume: o.volume })
+          break
+        }
         case 'trim': {
           const c = find(o.clipId)
           if (c) engine.trimClip(c.id, c.trackId, f(o.startSec), Math.max(1, f(o.durationSec)))

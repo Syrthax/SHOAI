@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import {
-  framesToTimecode, lazyExportVideo, usePlaybackStore, useTimelineEngine, useTracksStore,
-  type TimelineRef,
+  framesToTimecode, lazyExportVideo, usePlaybackStore, useSelectionStore,
+  useTimelineEngine, useTracksStore, type TimelineRef,
 } from '@elah/editor'
-import { Download, Maximize2, Pause, Play, Redo2, Undo2, X } from 'lucide-react'
+import { Download, Maximize2, Pause, Play, Plus, Redo2, Scissors, Trash2, Undo2, X } from 'lucide-react'
 import { FPS } from '../config'
 import { useAiPreviewActive } from '../editor/aiPreview'
+import { useUploadVideo } from '../editor/useUploadVideo'
 
 export default function Toolbar({ timelineRef }: { timelineRef: RefObject<TimelineRef | null> }) {
   const engine = useTimelineEngine()
@@ -15,6 +16,35 @@ export default function Toolbar({ timelineRef }: { timelineRef: RefObject<Timeli
   const canUndo = useTracksStore((s) => s.canUndo)
   const canRedo = useTracksStore((s) => s.canRedo)
   const previewing = useAiPreviewActive()
+  const selected = useSelectionStore((s) => s.selectedClipIds)
+  const { openPicker } = useUploadVideo()
+
+  // Split the selected clip and its linked audio/video partner at the playhead; with nothing
+  // selected, split every clip under the playhead. One undo step either way.
+  const split = () => {
+    const playback = usePlaybackStore.getState()
+    playback.pause()
+    const frame = playback.currentFrame
+    const all = Object.values(useTracksStore.getState().clips).flat() as any[]
+    const under = all.filter((c) => frame > c.startFrame && frame < c.startFrame + c.durationFrames)
+    const sel = [...useSelectionStore.getState().selectedClipIds]
+    const picked = sel.length
+      ? under.filter((c) => sel.includes(c.id) || under.some((s) => sel.includes(s.id) && s.src && s.src === c.src && s.startFrame === c.startFrame))
+      : under
+    if (!picked.length) return alert('Move the playhead over a clip to split it.')
+    engine.batch(() => picked.forEach((c) => engine.splitClip(c.id, c.trackId, frame)), 'Split at playhead')
+  }
+  const remove = () => {
+    const all = Object.values(useTracksStore.getState().clips).flat() as any[]
+    const ids = [...useSelectionStore.getState().selectedClipIds]
+    engine.batch(() => {
+      for (const id of ids) {
+        const c = all.find((x) => x.id === id)
+        if (c) engine.removeClip(c.id, c.trackId)
+      }
+    }, 'Delete clips')
+    useSelectionStore.getState().clearSelection()
+  }
   const [pct, setPct] = useState<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -67,6 +97,16 @@ export default function Toolbar({ timelineRef }: { timelineRef: RefObject<Timeli
         {framesToTimecode(currentFrame, FPS)} / {framesToTimecode(Math.max(totalFrames, 0), FPS)}
       </span>
       <span className="spacer" />
+      <button className="ghost" onClick={openPicker} disabled={previewing} title="Upload a video and add it at the end">
+        <Plus size={14} /> Video
+      </button>
+      <button className="ghost icon" onClick={split} disabled={previewing || totalFrames === 0} title="Split clip at playhead (S)">
+        <Scissors size={14} />
+      </button>
+      <button className="ghost icon" onClick={remove} disabled={previewing || selected.size === 0} title="Delete selected clip(s) (Delete)">
+        <Trash2 size={14} />
+      </button>
+      <span className="sep" />
       <button className="ghost icon" disabled={!canUndo || previewing} onClick={() => engine.undo()}
         title={previewing ? busyMsg : 'Undo (Ctrl/Cmd+Z)'}><Undo2 size={14} /></button>
       <button className="ghost icon" disabled={!canRedo || previewing} onClick={() => engine.redo()}

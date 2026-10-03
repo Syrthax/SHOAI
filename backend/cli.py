@@ -59,6 +59,7 @@ def review(plan: Plan, repairs: int, rejected: list[Rejected], timeline: dict) -
 
 def interactive(timeline: dict, plan_file: str | None) -> None:
     history: list[dict] = []  # snapshots before each kept AI edit -> one-step undo
+    edits: list[dict] = []    # kept edits so the AI knows what is already done
     print(render(timeline) + "\n\n" + HELP)
     while True:
         try:
@@ -77,14 +78,14 @@ def interactive(timeline: dict, plan_file: str | None) -> None:
             print(render(timeline)); continue
         if cmd == "/undo":
             if history:
-                timeline = history.pop(); print("Undone - whole AI edit reverted.\n" + render(timeline))
+                timeline = history.pop(); edits.pop(); print("Undone - whole AI edit reverted.\n" + render(timeline))
             else:
                 print("Nothing to undo.")
             continue
         if cmd == "/save":
             Path(arg).write_text(json.dumps(timeline, indent=2)); print(f"Saved to {arg}"); continue
         if cmd == "/load":
-            timeline = json.loads(Path(arg).read_text()); history.clear(); print(render(timeline)); continue
+            timeline = json.loads(Path(arg).read_text()); history.clear(); edits.clear(); print(render(timeline)); continue
 
         request, previous = text, None
         while True:  # a refine re-plans against the same ORIGINAL timeline, with the previous plan as context
@@ -93,7 +94,7 @@ def interactive(timeline: dict, plan_file: str | None) -> None:
                 if plan_file:
                     plan, repairs, rejected = plan_from_file(plan_file, timeline)
                 else:
-                    plan, repairs, rejected = make_validated_plan(request, timeline, previous)
+                    plan, repairs, rejected = make_validated_plan(request, timeline, previous, edits)
             except (PlanError, RuntimeError) as e:
                 print(f"error: {e}"); break
             except Exception as e:  # network / auth
@@ -101,6 +102,8 @@ def interactive(timeline: dict, plan_file: str | None) -> None:
 
             if plan.unsupportedReason:
                 print(f"\nAI: I can't do that - {plan.unsupportedReason}"); break
+            if plan.reply and not plan.ops:
+                print(f"\nAI: {plan.reply}"); break
             if not plan.ops:
                 print("\nAI: no valid edits to make.")
                 for r in rejected:
@@ -110,6 +113,7 @@ def interactive(timeline: dict, plan_file: str | None) -> None:
             action, result = review(plan, repairs, rejected, timeline)
             if action == "keep":
                 history.append(timeline); timeline = result
+                edits.append({"request": text, "summary": plan.summary})
                 print("Kept. /undo reverts this whole AI edit in one step."); break
             if action == "discard":
                 print("Discarded - timeline unchanged."); break
@@ -143,6 +147,9 @@ def main() -> None:
         return
     if plan.unsupportedReason:
         print(f"AI: I can't do that - {plan.unsupportedReason}")
+        return
+    if plan.reply and not plan.ops:
+        print(f"AI: {plan.reply}")
         return
     print_plan(plan, repairs, rejected, [True] * len(plan.ops))
     print("\nBEFORE\n" + render(timeline) + "\n\nAFTER\n" + render(apply_ops(timeline, plan.ops)))

@@ -27,8 +27,20 @@ def apply_ops(timeline: dict, ops: list[Op]) -> dict:
         elif o.op == "removeRange":
             remove_range(tl, o.fromSec, o.toSec)
             clips = {x["id"]: x for x in tl["clips"]}
+            if o.transition:
+                tl["transitions"].append({"from": "cut", "to": f"@{o.fromSec}s", "kind": o.transition, "durationSec": 0.8})
+        elif o.op == "deleteClip" and c:
+            if c["type"] in ("video", "audio"):
+                remove_range(tl, c["startSec"], c["startSec"] + c["durationSec"])
+            else:
+                tl["clips"] = [x for x in tl["clips"] if x is not c]
+            clips = {x["id"]: x for x in tl["clips"]}
+        elif o.op == "editText" and c:
+            c["name"] = f"Text: {o.text}"
         elif o.op == "trim" and c:
             c["startSec"], c["durationSec"] = o.startSec, o.durationSec
+        elif o.op == "setVolume" and c:
+            c["volume"] = o.volume
         elif o.op == "move" and c:
             c["startSec"] = o.startSec
         elif o.op in ("addLowerThird", "addSubtitle"):
@@ -62,7 +74,8 @@ def remove_range(tl: dict, a: float, b: float) -> None:
             if s < a:
                 out.append({**c, "durationSec": round(a - s, 3)})
             if e > b:
-                out.append({**c, "id": c["id"] + "-r" if s < a else c["id"], "startSec": a, "durationSec": round(e - b, 3)})
+                out.append({**c, "id": c["id"] + "-r" if s < a else c["id"], "startSec": a, "durationSec": round(e - b, 3),
+                            "sourceStartSec": round(c.get("sourceStartSec", 0) + (b - s), 3)})
     tl["clips"] = out
 
 

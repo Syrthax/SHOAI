@@ -22,12 +22,40 @@ class RemoveRange(BaseModel):
     op: Literal["removeRange"]
     fromSec: float = Field(ge=0)
     toSec: float = Field(gt=0)
+    # Optional transition placed on the video cut so the jump is smooth (timing is unchanged).
+    transition: Optional[Literal["fade", "slide", "wipe"]] = None
+    # "source" = times in the ORIGINAL video (what the user sees in the footage); the backend converts
+    # them to timeline times. "timeline" = times on the current, already-edited timeline.
+    timeBase: Literal["source", "timeline"] = "timeline"
+    # Filled in by the backend after converting from source time, for display only.
+    sourceFromSec: Optional[float] = None
+    sourceToSec: Optional[float] = None
 
     @model_validator(mode="after")
     def _ordered(self):
         if self.toSec <= self.fromSec:
             raise ValueError("toSec must be greater than fromSec")
         return self
+
+
+class SetVolume(BaseModel):
+    """Clip loudness: 0 = mute, 1 = original, up to 4 = boosted."""
+    op: Literal["setVolume"]
+    clipId: str
+    volume: float = Field(ge=0, le=4)
+
+
+class DeleteClip(BaseModel):
+    """Delete a whole clip. Video/audio: its span is removed from every track (stays in sync)."""
+    op: Literal["deleteClip"]
+    clipId: str
+
+
+class EditText(BaseModel):
+    """Change an existing text clip's words."""
+    op: Literal["editText"]
+    clipId: str
+    text: str = Field(min_length=1, max_length=120)
 
 
 class Move(BaseModel):
@@ -59,7 +87,7 @@ class AddTransition(BaseModel):
 
 
 Op = Annotated[
-    Union[Trim, CutStart, RemoveRange, Move, AddLowerThird, AddSubtitle, AddTransition],
+    Union[Trim, CutStart, RemoveRange, DeleteClip, EditText, SetVolume, Move, AddLowerThird, AddSubtitle, AddTransition],
     Field(discriminator="op"),
 ]
 
@@ -69,6 +97,8 @@ class Plan(BaseModel):
     ops: list[Op] = Field(default_factory=list, max_length=8)
     # Set when the request cannot be expressed with the allowed ops.
     unsupportedReason: Optional[str] = None
+    # A plain answer when no edit is needed (questions, "that's already done", clarifications).
+    reply: Optional[str] = None
 
 
 class Rejected(BaseModel):

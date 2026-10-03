@@ -14,6 +14,7 @@ class PlanRequest(BaseModel):
     timeline: dict[str, Any]
     previousPlan: Optional[dict[str, Any]] = None
     validationErrors: Optional[list[str]] = None
+    history: Optional[list[dict[str, Any]]] = None  # kept edits so far: [{request, summary}]
 
 
 @app.get("/api/health")
@@ -25,10 +26,10 @@ def health():
 def plan(req: PlanRequest):
     try:
         if req.validationErrors:  # frontend-driven repair round: just re-plan with the errors
-            plan_obj, repairs = make_plan(req.request, req.timeline, req.previousPlan, req.validationErrors)
+            plan_obj, repairs = make_plan(req.request, req.timeline, req.previousPlan, req.validationErrors, req.history)
             rejected = []
         else:
-            plan_obj, repairs, rejected = make_validated_plan(req.request, req.timeline, req.previousPlan)
+            plan_obj, repairs, rejected = make_validated_plan(req.request, req.timeline, req.previousPlan, req.history)
     except PlanError as e:
         raise HTTPException(status_code=422, detail=f"AI returned an invalid plan: {e}")
     except Exception as e:  # network / auth

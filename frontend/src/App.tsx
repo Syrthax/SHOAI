@@ -1,9 +1,10 @@
 import { useRef } from 'react'
 import {
-  EditorProvider, Preview, Timeline, AssetPanel,
+  EditorProvider, Preview, Timeline, SourcePanel,
   createDefaultDemuxerFactory, type InitialTrackConfig, type TimelineRef,
 } from '@elah/editor'
-import ChatPanel from './ui/ChatPanel'
+import SidePanel from './ui/SidePanel'
+import TimelineDropZone from './ui/TimelineDropZone'
 import Toolbar from './ui/Toolbar'
 import { FPS } from './config'
 
@@ -20,13 +21,16 @@ export default function App() {
   return (
     <EditorProvider fps={FPS} stage={{ width: 1920, height: 1080 }} initialTracks={TRACKS}>
       <div className="elah-root app">
-        <AssetPanel style={{ width: 220, flexShrink: 0 }} />
+        <SourcePanel defaultLane="media" style={{ width: 240, flexShrink: 0 }} />
         <div className="center">
           <Preview demuxerFactory={demuxerFactory} style={{ flex: 1, minHeight: 0 }} />
           <Toolbar timelineRef={timelineRef} />
-          <Timeline ref={timelineRef} fps={FPS} style={{ height: 240, flexShrink: 0 }} />
+          <div className="timeline-wrap">
+            <Timeline ref={timelineRef} fps={FPS} style={{ height: 240 }} />
+            <TimelineDropZone />
+          </div>
         </div>
-        <ChatPanel />
+        <SidePanel />
       </div>
     </EditorProvider>
   )

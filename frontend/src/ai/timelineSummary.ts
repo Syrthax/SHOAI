@@ -14,6 +14,7 @@ export function summarizeTimeline(fps: number): TimelineSummary {
       name: c.name ?? c.content ?? '',
       startSec: c.startFrame / fps,
       durationSec: c.durationFrames / fps,
+      volume: c.volume ?? 1,
     })),
   }
 }

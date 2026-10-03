@@ -23,6 +23,8 @@ def validate_plan(plan: Plan, timeline: dict) -> dict[int, list[str]]:
             errs.append(f"durationSec {o.durationSec} exceeds clip length {c['durationSec']}")
         if o.op == "cutStart" and c and o.seconds >= c["durationSec"]:
             errs.append(f"seconds {o.seconds} must be less than clip length {c['durationSec']}")
+        if o.op == "editText" and c and c.get("type") != "text":
+            errs.append(f'clip "{clip_id}" is a {c.get("type")} clip, not text')
         if o.op == "removeRange":
             dur = timeline.get("durationSec", 0)
             if o.fromSec >= dur:
