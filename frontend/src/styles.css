@@ -1,0 +1,22 @@
+html, body, #root { height: 100%; margin: 0; }
+body { background: #0b0b12; color: #e8e8f0; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.app { display: flex; height: 100vh; }
+.center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chat { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; border-left: 1px solid #2e2e48; background: #12121c; }
+.chat h3 { margin: 0; padding: 12px; border-bottom: 1px solid #2e2e48; font-size: 14px; }
+.msgs { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.msg { font-size: 13px; padding: 8px 10px; border-radius: 6px; background: #1e1e30; white-space: pre-wrap; }
+.msg.user { background: #3b2a6b; }
+.msg.err { background: #4a1d1d; }
+.card { border: 1px solid #7c3aed; border-radius: 8px; padding: 10px; background: #171726; font-size: 12px; }
+.card.unsupported { border-color: #b45309; }
+.op { display: flex; gap: 6px; align-items: flex-start; padding: 4px 0; }
+.badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 99px; background: #14532d; margin-left: 6px; }
+.row { display: flex; gap: 6px; margin-top: 8px; }
+button { background: #7c3aed; color: #fff; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; font-family: inherit; font-size: 12px; }
+button.ghost { background: #2e2e48; }
+button.ok { background: #16a34a; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.input { display: flex; gap: 6px; padding: 10px; border-top: 1px solid #2e2e48; }
+.input input { flex: 1; background: #0b0b12; border: 1px solid #2e2e48; color: inherit; border-radius: 6px; padding: 8px; font-family: inherit; }
+details pre { max-height: 140px; overflow: auto; background: #0b0b12; padding: 6px; border-radius: 4px; }
