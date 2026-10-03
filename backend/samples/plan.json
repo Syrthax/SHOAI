@@ -1,0 +1,10 @@
+{
+  "summary": "Cut the intro's first 3s, add a lower third and a fade (one op is deliberately invalid)",
+  "ops": [
+    { "op": "cutStart", "clipId": "clip-intro", "seconds": 3 },
+    { "op": "addLowerThird", "text": "Sarthak Ghosh", "startSec": 0, "durationSec": 3 },
+    { "op": "addTransition", "fromClipId": "clip-intro", "toClipId": "clip-demo", "kind": "fade", "durationSec": 0.5 },
+    { "op": "move", "clipId": "clip-does-not-exist", "startSec": 2 }
+  ],
+  "unsupportedReason": null
+}

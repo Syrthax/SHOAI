@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAiSession } from '../editor/useAiSession'
 import PlanCard from './PlanCard'
+import SampleClipsButton from './SampleClipsButton'
 
 export default function ChatPanel() {
   const s = useAiSession()
@@ -16,7 +17,7 @@ export default function ChatPanel() {
 
   return (
     <aside className="chat">
-      <h3>AI Copilot</h3>
+      <h3>AI Copilot <SampleClipsButton /></h3>
       <div className="msgs">
         {s.msgs.length === 0 && (
           <div className="msg">Try: "Remove the first 3 seconds and add my name as a lower third at the start"</div>

@@ -1,0 +1,8 @@
+{
+  "fps": 30,
+  "durationSec": 20,
+  "clips": [
+    { "id": "clip-intro", "trackId": "video", "type": "video", "name": "intro.mp4", "startSec": 0, "durationSec": 12 },
+    { "id": "clip-demo", "trackId": "video", "type": "video", "name": "demo.mp4", "startSec": 12, "durationSec": 8 }
+  ]
+}

@@ -1,0 +1,31 @@
+diff --git a/node_modules/@elah/core/dist/media/video/StreamingFrameProducer.js b/node_modules/@elah/core/dist/media/video/StreamingFrameProducer.js
+index 885f410..74d57fa 100644
+--- a/node_modules/@elah/core/dist/media/video/StreamingFrameProducer.js
++++ b/node_modules/@elah/core/dist/media/video/StreamingFrameProducer.js
+@@ -12,9 +12,25 @@ function makeFallbackBitmap(frame) {
+         close() { },
+     };
+ }
+-const defaultFrameConverter = typeof createImageBitmap !== 'undefined'
++const baseFrameConverter = typeof createImageBitmap !== 'undefined'
+     ? (frame) => createImageBitmap(frame, { imageOrientation: 'flipY' })
+     : (frame) => Promise.resolve(makeFallbackBitmap(frame));
++// SHOAI patch: Safari ends up one vertical flip off, so the preview is upside down.
++// Mirror the mirror: take Safari's result and flip it once more via a 2D canvas.
++const isSafari = typeof navigator !== 'undefined' &&
++    /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent);
++const defaultFrameConverter = isSafari && typeof OffscreenCanvas !== 'undefined'
++    ? async (frame) => {
++        const bmp = await baseFrameConverter(frame);
++        const canvas = new OffscreenCanvas(bmp.width, bmp.height);
++        const ctx = canvas.getContext('2d');
++        ctx.translate(0, bmp.height);
++        ctx.scale(1, -1);
++        ctx.drawImage(bmp, 0, 0);
++        bmp.close();
++        return createImageBitmap(canvas);
++    }
++    : baseFrameConverter;
+ const DEFAULT_IDLE_TIMEOUT_MS = 5000;
+ const STALL_TICKS_BEFORE_RESET = 45;
+ function _sfpTrace(msg, data) {

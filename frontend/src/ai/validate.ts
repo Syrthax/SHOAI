@@ -1,4 +1,4 @@
-// Layer-2 validation: does the plan make sense for THIS timeline?
+// Layer-2 validation: does the plan make sense for THIS timeline? Mirrors backend/app/validate.py.
 import type { Plan, TimelineSummary } from './schema'
 
 export function validatePlan(plan: Plan, tl: TimelineSummary): string[] {
@@ -13,6 +13,16 @@ export function validatePlan(plan: Plan, tl: TimelineSummary): string[] {
     if (o.op === 'trim') {
       const c = byId.get(o.clipId)
       if (c && o.durationSec > c.durationSec + 0.01) errors.push(`${at}: durationSec ${o.durationSec} exceeds clip length ${c.durationSec}`)
+    }
+    if (o.op === 'cutStart') {
+      const c = byId.get(o.clipId)
+      if (c && o.seconds >= c.durationSec) errors.push(`${at}: seconds ${o.seconds} must be less than clip length ${c.durationSec}`)
+    }
+    if (o.op === 'removeRange') {
+      if (o.toSec <= o.fromSec) errors.push(`${at}: toSec must be greater than fromSec`)
+      if (o.fromSec >= tl.durationSec) errors.push(`${at}: fromSec ${o.fromSec} is at or past the end of the timeline (${tl.durationSec}s)`)
+      if (o.toSec > tl.durationSec + 0.05) errors.push(`${at}: toSec ${o.toSec} is past the end of the timeline (${tl.durationSec}s)`)
+      if (o.fromSec <= 0.01 && o.toSec >= tl.durationSec - 0.01) errors.push(`${at}: removeRange would delete the entire timeline`)
     }
     if (o.op === 'addTransition') {
       const a = byId.get(o.fromClipId), b = byId.get(o.toClipId)

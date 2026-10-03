@@ -1,11 +1,11 @@
-import type { Plan, TimelineSummary } from './schema'
+import type { Plan, Rejected, TimelineSummary } from './schema'
 
 export async function fetchPlan(body: {
   request: string
   timeline: TimelineSummary
   previousPlan?: Plan | null
   validationErrors?: string[]
-}): Promise<{ plan: Plan; repairs: number }> {
+}): Promise<{ plan: Plan; repairs: number; rejected?: Rejected[] }> {
   const res = await fetch('/api/plan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

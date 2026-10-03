@@ -6,6 +6,7 @@ import { validatePlan } from '../ai/validate'
 import type { Plan } from '../ai/schema'
 import { applyOps } from './applyPlan'
 import { FPS } from '../config'
+import { setAiPreviewActive } from './aiPreview'
 
 export type Msg = { role: 'user' | 'ai' | 'err'; text: string }
 
@@ -16,13 +17,17 @@ export function useAiSession() {
   const [enabled, setEnabled] = useState<boolean[]>([])
   const [busy, setBusy] = useState(false)
   const [repairs, setRepairs] = useState(0)
-  const applied = useRef(false) // is a preview currently applied?
+  // The project object right after the preview was applied. Undo only if the timeline is still
+  // exactly that, so a manual Ctrl+Z (or other edit) during preview can't make us undo the wrong step.
+  const previewProject = useRef<unknown>(null)
 
   const log = (m: Msg) => setMsgs((x) => [...x, m])
 
   // Remove the current preview with ONE undo.
   const clearPreview = () => {
-    if (applied.current) { engine.undo(); applied.current = false }
+    if (previewProject.current && engine.getProject() === previewProject.current) engine.undo()
+    previewProject.current = null
+    setAiPreviewActive(false)
   }
 
   const showPreview = (p: Plan, en: boolean[]) => {
@@ -30,7 +35,8 @@ export function useAiSession() {
     const ops = p.ops.filter((_, i) => en[i])
     if (!ops.length) return
     applyOps(engine, ops, FPS, p.summary)
-    applied.current = true
+    previewProject.current = engine.getProject()
+    setAiPreviewActive(true)
   }
 
   async function submit(text: string, refine = false) {
@@ -53,15 +59,20 @@ export function useAiSession() {
         if (again.length) throw new Error('Plan still invalid after repair:\n' + again.join('\n'))
       }
       setRepairs(rep)
-      setPlan(p)
+      for (const r of res.rejected ?? []) log({ role: 'err', text: `Skipped invalid ${String(r.op.op)}: ${r.reason}` })
       if (p.unsupportedReason) {
+        setPlan(p)
         log({ role: 'ai', text: `I can't do that: ${p.unsupportedReason}` })
         return
       }
+      if (!p.ops.length) {
+        log({ role: 'ai', text: 'No valid edits to make for that request.' })
+        return
+      }
+      setPlan(p)
       const en = p.ops.map(() => true)
       setEnabled(en)
-      showPreview(p, en)
-      log({ role: 'ai', text: p.summary })
+      showPreview(p, en) // the plan card shows the summary, so no extra chat message
     } catch (e: any) {
       log({ role: 'err', text: e.message ?? String(e) })
     } finally {
@@ -76,7 +87,12 @@ export function useAiSession() {
     showPreview(plan, en)
   }
 
-  const keep = () => { applied.current = false; setPlan(null); log({ role: 'ai', text: 'Kept. Use Undo (Ctrl+Z) to revert the whole AI edit.' }) }
+  const keep = () => {
+    previewProject.current = null
+    setAiPreviewActive(false)
+    log({ role: 'ai', text: `Kept: ${plan?.summary ?? 'AI edit'}. Undo reverts the whole AI edit in one step.` })
+    setPlan(null)
+  }
   const discard = () => { clearPreview(); setPlan(null); log({ role: 'ai', text: 'Discarded - timeline restored.' }) }
 
   return { msgs, plan, enabled, busy, repairs, submit, toggleOp, keep, discard }
